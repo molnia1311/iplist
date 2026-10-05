@@ -5,11 +5,11 @@ external sources and kept in memory.
 
 ## Endpoints
 
-- `GET /` — list available endpoints
-- `GET /github` — IPv4 CIDRs from the GitHub meta API
-- `GET /azure/teams` — IPv4 CIDRs for the Azure `AzureBotService` service tag
-- `GET /azure/microsoftteams` — alias for `/azure/teams`
-- `GET /metrics` — Prometheus metrics
+- `GET /` – list available endpoints
+- `GET /github` – IPv4 CIDRs from the GitHub meta API
+- `GET /azure/teams` – IPv4 CIDRs for the Azure `AzureBotService` service tag
+- `GET /azure/microsoftteams` – alias for `/azure/teams`
+- `GET /metrics` – Prometheus metrics
 
 ## Metrics
 
@@ -60,7 +60,7 @@ The server listens on `:8080` by default. Use `-addr` or `LISTEN_ADDR` to change
 ## Configuration
 
 | Env var | Default | Description |
-|---|---|---|
+|---------|---------|-------------|
 | `LISTEN_ADDR` | `:8080` | Address to listen on |
 | `REFRESH_INTERVAL` | `1h` | How often to refresh allowlists |
 | `FETCH_TIMEOUT` | `30s` | Upstream HTTP fetch timeout |
@@ -90,7 +90,7 @@ docker run -p 8080:8080 iplist
 
 ## Sources
 
-- Azure Service Tags — Public Cloud: https://www.microsoft.com/en-us/download/details.aspx?id=56519
+- Azure Service Tags – Public Cloud: https://www.microsoft.com/en-us/download/details.aspx?id=56519
 - GitHub meta API: https://api.github.com/meta
 
 If an upstream source is unavailable, the last successfully fetched list is served.
