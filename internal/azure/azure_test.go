@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-func TestFetchExtractsAzureBotService(t *testing.T) {
+func TestFetchReturnsAllTags(t *testing.T) {
 	jsonBody := `{
 		"changeNumber": 1,
 		"cloud": "Public",
@@ -29,6 +29,12 @@ func TestFetchExtractsAzureBotService(t *testing.T) {
 				"name": "Storage",
 				"properties": {
 					"addressPrefixes": ["10.0.0.0/16"]
+				}
+			},
+			{
+				"name": "IPv6Only",
+				"properties": {
+					"addressPrefixes": ["2606:50c0::/32"]
 				}
 			}
 		]
@@ -52,19 +58,45 @@ func TestFetchExtractsAzureBotService(t *testing.T) {
 	detailsURL = ts.URL + "/details.aspx?id=56519"
 
 	src := NewSource(5 * time.Second)
-	prefixes, err := src.Fetch(context.Background())
+	result, err := src.Fetch(context.Background())
 	if err != nil {
 		t.Fatalf("Fetch failed: %v", err)
 	}
 
-	want := []string{"13.107.42.0/24", "40.126.0.0/18"}
-	if len(prefixes) != len(want) {
-		t.Fatalf("got %d prefixes, want %d: %v", len(prefixes), len(want), prefixes)
+	if len(result) != 2 {
+		t.Fatalf("got %d tags, want 2: %v", len(result), result)
 	}
-	for i, p := range want {
-		if prefixes[i] != p {
-			t.Errorf("prefix %d: got %s, want %s", i, prefixes[i], p)
+
+	wantAzureBotService := []string{"13.107.42.0/24", "40.126.0.0/18"}
+	if got, ok := result["AzureBotService"]; !ok {
+		t.Fatalf("missing AzureBotService tag")
+	} else {
+		if len(got) != len(wantAzureBotService) {
+			t.Fatalf("AzureBotService: got %d prefixes, want %d: %v", len(got), len(wantAzureBotService), got)
 		}
+		for i, p := range wantAzureBotService {
+			if got[i] != p {
+				t.Errorf("AzureBotService prefix %d: got %s, want %s", i, got[i], p)
+			}
+		}
+	}
+
+	wantStorage := []string{"10.0.0.0/16"}
+	if got, ok := result["Storage"]; !ok {
+		t.Fatalf("missing Storage tag")
+	} else {
+		if len(got) != len(wantStorage) {
+			t.Fatalf("Storage: got %d prefixes, want %d: %v", len(got), len(wantStorage), got)
+		}
+		for i, p := range wantStorage {
+			if got[i] != p {
+				t.Errorf("Storage prefix %d: got %s, want %s", i, got[i], p)
+			}
+		}
+	}
+
+	if _, ok := result["IPv6Only"]; ok {
+		t.Fatalf("IPv6Only should have been skipped")
 	}
 }
 

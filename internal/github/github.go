@@ -32,8 +32,9 @@ func NewSource(timeout time.Duration) *Source {
 // Name returns the allowlist name.
 func (s *Source) Name() string { return "github" }
 
-// Fetch retrieves the GitHub meta API and returns relevant IPv4 CIDR prefixes.
-func (s *Source) Fetch(ctx context.Context) ([]string, error) {
+// Fetch retrieves the GitHub meta API and returns relevant IPv4 CIDR prefixes
+// under the single key "github".
+func (s *Source) Fetch(ctx context.Context) (map[string][]string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
 	if err != nil {
 		return nil, err
@@ -83,7 +84,7 @@ func (s *Source) Fetch(ctx context.Context) ([]string, error) {
 		return nil, fmt.Errorf("no IPv4 prefixes found in GitHub meta response")
 	}
 
-	return sortedKeys(prefixes), nil
+	return map[string][]string{"github": sortedKeys(prefixes)}, nil
 }
 
 func isIPv4CIDR(s string) bool {

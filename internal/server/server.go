@@ -14,15 +14,16 @@ import (
 	"git.stellar.study/stellar-study/iplist/internal/metrics"
 )
 
-// Source fetches IPv4 CIDR prefixes for a single allowlist.
+// Source fetches IPv4 CIDR prefixes grouped by list name.
 type Source interface {
-	// Name identifies the allowlist (e.g. "github", "azure").
+	// Name identifies the source (e.g. "github", "azure").
 	Name() string
-	// Fetch returns IPv4 CIDR prefixes. Errors leave the previous cache intact.
-	Fetch(ctx context.Context) ([]string, error)
+	// Fetch returns IPv4 CIDR prefixes keyed by list name.
+	// Errors leave the previous cache intact.
+	Fetch(ctx context.Context) (map[string][]string, error)
 }
 
-// cached holds the last good fetch result for a source.
+// cached holds the last good fetch result for a list.
 type cached struct {
 	mu          sync.RWMutex
 	prefixes    []string
@@ -54,7 +55,6 @@ func (c *cached) get() ([]string, time.Time, error) {
 type Server struct {
 	sources    map[string]Source
 	caches     map[string]*cached
-	aliases    map[string]string
 	addr       string
 	interval   time.Duration
 	httpServer *http.Server
@@ -64,8 +64,7 @@ type Server struct {
 func New(addr string, interval time.Duration, sources []Source) *Server {
 	s := &Server{
 		sources:  make(map[string]Source, len(sources)),
-		caches:   make(map[string]*cached, len(sources)),
-		aliases:  make(map[string]string),
+		caches:   make(map[string]*cached),
 		addr:     addr,
 		interval: interval,
 	}
@@ -73,21 +72,21 @@ func New(addr string, interval time.Duration, sources []Source) *Server {
 	for _, src := range sources {
 		name := src.Name()
 		s.sources[name] = src
-		s.caches[name] = &cached{}
+		// GitHub exposes a single known list; pre-create its cache so the
+		// endpoint returns 503 before the first fetch instead of 404.
+		if name == "github" {
+			s.caches["github:github"] = &cached{}
+		}
 	}
-
-	// Path aliases. Both /azure/teams and /azure/microsoftteams serve the Azure Bot Service allowlist.
-	s.aliases["/github"] = "github"
-	s.aliases["/azure/teams"] = "azure"
-	s.aliases["/azure/microsoftteams"] = "azure"
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/metrics", metrics.Handler)
+	mux.HandleFunc("/github", s.handleAllowlist("github:github"))
+	mux.HandleFunc("/azure/", s.handleAzure)
 	mux.HandleFunc("/", s.handleIndex)
-	for path, name := range s.aliases {
-		log.Printf("registered endpoint: %s -> %s", path, name)
-		mux.HandleFunc(path, s.handleAllowlist(name))
-	}
+
+	log.Printf("registered endpoint: GET /github -> github:github")
+	log.Printf("registered endpoint: GET /azure/{tag}")
 
 	s.httpServer = &http.Server{
 		Addr:    addr,
@@ -147,27 +146,38 @@ func (s *Server) refreshAll(ctx context.Context) {
 }
 
 func (s *Server) refreshOne(ctx context.Context, name string, src Source) {
-	prefixes, err := src.Fetch(ctx)
+	result, err := src.Fetch(ctx)
 	if err != nil {
 		log.Printf("fetch failed for %s: %v", name, err)
-		s.caches[name].setError(err)
-		metrics.FetchTotal.WithLabelValues(name, "failure").Inc()
+		// Record the error against every list already cached for this source.
+		for key := range s.caches {
+			if strings.HasPrefix(key, name+":") {
+				s.caches[key].setError(err)
+				metrics.FetchTotal.WithLabelValues(key, "failure").Inc()
+			}
+		}
 		return
 	}
 
-	s.caches[name].set(prefixes)
-	metrics.FetchTotal.WithLabelValues(name, "success").Inc()
-	metrics.PrefixesTotal.WithLabelValues(name).Set(float64(len(prefixes)))
-	metrics.LastSuccessTimestamp.WithLabelValues(name).Set(float64(time.Now().Unix()))
-	metrics.StalenessSeconds.WithLabelValues(name).Set(0)
-	log.Printf("refreshed %s: %d prefixes", name, len(prefixes))
+	for listName, prefixes := range result {
+		key := name + ":" + listName
+		if _, ok := s.caches[key]; !ok {
+			s.caches[key] = &cached{}
+		}
+		s.caches[key].set(prefixes)
+		metrics.FetchTotal.WithLabelValues(key, "success").Inc()
+		metrics.PrefixesTotal.WithLabelValues(key).Set(float64(len(prefixes)))
+		metrics.LastSuccessTimestamp.WithLabelValues(key).Set(float64(time.Now().Unix()))
+		metrics.StalenessSeconds.WithLabelValues(key).Set(0)
+		log.Printf("refreshed %s: %d prefixes", key, len(prefixes))
+	}
 }
 
 func (s *Server) updateStaleness() {
-	for name := range s.sources {
-		_, lastSuccess, _ := s.caches[name].get()
+	for key := range s.caches {
+		_, lastSuccess, _ := s.caches[key].get()
 		if !lastSuccess.IsZero() {
-			metrics.StalenessSeconds.WithLabelValues(name).Set(time.Since(lastSuccess).Seconds())
+			metrics.StalenessSeconds.WithLabelValues(key).Set(time.Since(lastSuccess).Seconds())
 		}
 	}
 }
@@ -180,9 +190,12 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 
 	var b strings.Builder
 	b.WriteString("iplist allowlist server\n\nendpoints:\n")
-	paths := make([]string, 0, len(s.aliases))
-	for p := range s.aliases {
-		paths = append(paths, p)
+	paths := make([]string, 0, len(s.caches)+2)
+	paths = append(paths, "/github")
+	for key := range s.caches {
+		if strings.HasPrefix(key, "azure:") {
+			paths = append(paths, "/azure/"+strings.TrimPrefix(key, "azure:"))
+		}
 	}
 	sort.Strings(paths)
 	for _, p := range paths {
@@ -195,14 +208,35 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte(b.String()))
 }
 
-func (s *Server) handleAllowlist(name string) http.HandlerFunc {
+func (s *Server) handleAzure(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	tag := strings.TrimPrefix(r.URL.Path, "/azure/")
+	if tag == "" || strings.Contains(tag, "/") {
+		http.NotFound(w, r)
+		return
+	}
+
+	s.handleAllowlist("azure:"+tag).ServeHTTP(w, r)
+}
+
+func (s *Server) handleAllowlist(key string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
 
-		prefixes, lastSuccess, lastErr := s.caches[name].get()
+		c, ok := s.caches[key]
+		if !ok {
+			http.NotFound(w, r)
+			return
+		}
+
+		prefixes, lastSuccess, lastErr := c.get()
 		if len(prefixes) == 0 && lastSuccess.IsZero() {
 			msg := "allowlist not yet available"
 			if lastErr != nil {

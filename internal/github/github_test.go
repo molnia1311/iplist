@@ -31,9 +31,14 @@ func TestFetchFiltersIPv4(t *testing.T) {
 	apiURL = ts.URL
 
 	src := NewSource(5 * time.Second)
-	prefixes, err := src.Fetch(context.Background())
+	result, err := src.Fetch(context.Background())
 	if err != nil {
 		t.Fatalf("Fetch failed: %v", err)
+	}
+
+	prefixes, ok := result["github"]
+	if !ok {
+		t.Fatalf("missing github list in result: %v", result)
 	}
 
 	want := []string{

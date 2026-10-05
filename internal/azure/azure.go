@@ -16,11 +16,9 @@ import (
 
 var detailsURL = "https://www.microsoft.com/en-us/download/details.aspx?id=56519"
 
-const tagName = "AzureBotService"
-
 var jsonURLRE = regexp.MustCompile(`https?://[^"\s<>]+?\.json`)
 
-// Source fetches the AzureBotService service tag IPv4 prefixes.
+// Source fetches Azure Service Tag IPv4 prefixes.
 type Source struct {
 	client *http.Client
 }
@@ -35,8 +33,9 @@ func NewSource(timeout time.Duration) *Source {
 // Name returns the allowlist name.
 func (s *Source) Name() string { return "azure" }
 
-// Fetch retrieves the current Azure Service Tags JSON and returns IPv4 prefixes for AzureBotService.
-func (s *Source) Fetch(ctx context.Context) ([]string, error) {
+// Fetch retrieves the current Azure Service Tags JSON and returns IPv4 prefixes
+// for every official tag, keyed by tag name.
+func (s *Source) Fetch(ctx context.Context) (map[string][]string, error) {
 	jsonURL, err := s.resolveJSONURL(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("resolve azure json url: %w", err)
@@ -75,23 +74,25 @@ func (s *Source) Fetch(ctx context.Context) ([]string, error) {
 		return nil, fmt.Errorf("decode azure json: %w", err)
 	}
 
-	prefixes := make(map[string]struct{})
+	result := make(map[string][]string)
 	for _, v := range doc.Values {
-		if v.Name != tagName {
-			continue
-		}
+		prefixes := make(map[string]struct{})
 		for _, p := range v.Properties.AddressPrefixes {
 			if isIPv4CIDR(p) {
 				prefixes[p] = struct{}{}
 			}
 		}
+		if len(prefixes) == 0 {
+			continue
+		}
+		result[v.Name] = sortedKeys(prefixes)
 	}
 
-	if len(prefixes) == 0 {
-		return nil, fmt.Errorf("no IPv4 prefixes found for service tag %s", tagName)
+	if len(result) == 0 {
+		return nil, fmt.Errorf("no IPv4 prefixes found in Azure Service Tags")
 	}
 
-	return sortedKeys(prefixes), nil
+	return result, nil
 }
 
 func (s *Source) resolveJSONURL(ctx context.Context) (string, error) {
