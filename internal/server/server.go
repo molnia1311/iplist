@@ -52,7 +52,6 @@ func (c *cached) get() ([]string, time.Time, error) {
 
 // Server serves allowlists over HTTP and refreshes them periodically.
 type Server struct {
-	mu         sync.RWMutex
 	sources    map[string]Source
 	caches     map[string]*cached
 	aliases    map[string]string

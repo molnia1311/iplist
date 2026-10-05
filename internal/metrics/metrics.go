@@ -179,7 +179,7 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 
 	for _, m := range metrics {
 		name, help, typ, labels, values := m.collect()
-		fmt.Fprintf(w, "# HELP %s %s\n# TYPE %s %s\n", name, help, name, typ)
+		_, _ = fmt.Fprintf(w, "# HELP %s %s\n# TYPE %s %s\n", name, help, name, typ)
 
 		keys := make([]string, 0, len(values))
 		for k := range values {
@@ -193,7 +193,7 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 			for i, ln := range labels {
 				pairs[i] = fmt.Sprintf("%s=\"%s\"", ln, labelValues[i])
 			}
-			fmt.Fprintf(w, "%s{%s} %g\n", name, strings.Join(pairs, ","), values[key])
+			_, _ = fmt.Fprintf(w, "%s{%s} %g\n", name, strings.Join(pairs, ","), values[key])
 		}
 	}
 }
