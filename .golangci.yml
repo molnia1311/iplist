@@ -1,0 +1,29 @@
+version: "2"
+
+linters:
+  default: standard
+  enable:
+    - errcheck      # unchecked errors
+    - govet
+    - ineffassign   # assignments never used
+    - staticcheck
+    - unused
+    - bodyclose     # unclosed HTTP response bodies
+    - errorlint     # error wrapping mistakes
+    - exhaustive    # non-exhaustive enum switches
+    - nilerr        # returning nil when err is non-nil
+
+  settings:
+    exhaustive:
+      default-signifies-exhaustive: true
+
+  exclusions:
+    rules:
+      # Tests may skip error checks on setup helpers
+      - path: _test\.go
+        linters:
+          - errcheck
+
+formatters:
+  enable:
+    - gofmt

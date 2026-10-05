@@ -1,0 +1,26 @@
+# Builds and pushes a container image to the Gitea package registry.
+# Runs only after the tests workflow passes on the default branch.
+#
+# Registry secrets (gitea_user, gitea_password) are org-level — no per-repo setup needed.
+
+depends_on:
+  - tests
+
+when:
+  - event: push
+    branch: ${CI_REPO_DEFAULT_BRANCH}
+  - event: tag
+
+steps:
+  publish:
+    image: woodpeckerci/plugin-docker-buildx
+    settings:
+      registry: git.stellar.study
+      repo: git.stellar.study/${CI_REPO_OWNER}/${CI_REPO_NAME}
+      tags:
+        - latest
+        - ${CI_COMMIT_SHA:0:8}
+      username:
+        from_secret: gitea_user
+      password:
+        from_secret: gitea_password
