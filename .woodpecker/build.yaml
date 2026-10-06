@@ -18,8 +18,8 @@ steps:
       registry: git.stellar.study
       repo: git.stellar.study/${CI_REPO_OWNER}/${CI_REPO_NAME}
       tags:
-        - latest
         - ${CI_COMMIT_SHA:0:8}
+      auto_tag: true
       username:
         from_secret: gitea_user
       password:
