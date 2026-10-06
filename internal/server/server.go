@@ -160,7 +160,7 @@ func (s *Server) refreshOne(ctx context.Context, name string, src Source) {
 	}
 
 	for listName, prefixes := range result {
-		key := name + ":" + listName
+		key := name + ":" + strings.ToLower(listName)
 		if _, ok := s.caches[key]; !ok {
 			s.caches[key] = &cached{}
 		}
@@ -214,7 +214,7 @@ func (s *Server) handleAzure(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tag := strings.TrimPrefix(r.URL.Path, "/azure/")
+	tag := strings.ToLower(strings.TrimPrefix(r.URL.Path, "/azure/"))
 	if tag == "" || strings.Contains(tag, "/") {
 		http.NotFound(w, r)
 		return

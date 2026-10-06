@@ -88,18 +88,25 @@ func TestAzureTag(t *testing.T) {
 		"MicrosoftTeams":  {"52.113.74.0/24"},
 	}}
 	srv := New("127.0.0.1:0", time.Hour, []Source{src})
-	srv.caches["azure:AzureBotService"] = &cached{}
-	srv.caches["azure:AzureBotService"].set([]string{"13.107.42.0/24"})
-	srv.caches["azure:MicrosoftTeams"] = &cached{}
-	srv.caches["azure:MicrosoftTeams"].set([]string{"52.113.74.0/24"})
+	srv.caches["azure:azurebotservice"] = &cached{}
+	srv.caches["azure:azurebotservice"].set([]string{"13.107.42.0/24"})
+	srv.caches["azure:microsoftteams"] = &cached{}
+	srv.caches["azure:microsoftteams"].set([]string{"52.113.74.0/24"})
 
-	for _, path := range []string{"/azure/AzureBotService", "/azure/MicrosoftTeams"} {
+	var wantBody string
+	for _, path := range []string{"/azure/AzureBotService", "/azure/azurebotservice", "/azure/azureBotService"} {
 		req := httptest.NewRequest(http.MethodGet, path, nil)
 		rec := httptest.NewRecorder()
 		srv.httpServer.Handler.ServeHTTP(rec, req)
 
 		if rec.Code != http.StatusOK {
 			t.Fatalf("%s: got status %d, want %d", path, rec.Code, http.StatusOK)
+		}
+		body, _ := io.ReadAll(rec.Body)
+		if wantBody == "" {
+			wantBody = string(body)
+		} else if string(body) != wantBody {
+			t.Errorf("%s: body mismatch\nwant: %q\ngot:  %q", path, wantBody, string(body))
 		}
 	}
 
@@ -108,11 +115,11 @@ func TestAzureTag(t *testing.T) {
 	rec := httptest.NewRecorder()
 	srv.httpServer.Handler.ServeHTTP(rec, req)
 	body, _ := io.ReadAll(rec.Body)
-	if !strings.Contains(string(body), "/azure/AzureBotService") {
-		t.Errorf("index did not list /azure/AzureBotService: %q", string(body))
+	if !strings.Contains(string(body), "/azure/azurebotservice") {
+		t.Errorf("index did not list /azure/azurebotservice: %q", string(body))
 	}
-	if !strings.Contains(string(body), "/azure/MicrosoftTeams") {
-		t.Errorf("index did not list /azure/MicrosoftTeams: %q", string(body))
+	if !strings.Contains(string(body), "/azure/microsoftteams") {
+		t.Errorf("index did not list /azure/microsoftteams: %q", string(body))
 	}
 }
 
