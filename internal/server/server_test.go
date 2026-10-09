@@ -148,3 +148,35 @@ func TestAzureTagInvalidPath(t *testing.T) {
 		t.Fatalf("got status %d, want %d", rec.Code, http.StatusNotFound)
 	}
 }
+
+func TestM365Area(t *testing.T) {
+	src := &fakeSource{name: "m365", result: map[string][]string{
+		"skype": {"52.112.0.0/14", "52.122.0.0/15"},
+	}}
+	srv := New("127.0.0.1:0", time.Hour, []Source{src})
+	srv.caches["m365:skype"] = &cached{}
+	srv.caches["m365:skype"].set([]string{"52.112.0.0/14", "52.122.0.0/15"})
+
+	req := httptest.NewRequest(http.MethodGet, "/m365/skype", nil)
+	rec := httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("got status %d, want %d", rec.Code, http.StatusOK)
+	}
+	body, _ := io.ReadAll(rec.Body)
+	lines := strings.Split(strings.TrimSpace(string(body)), "\n")
+	if len(lines) != 2 || lines[0] != "52.112.0.0/14" || lines[1] != "52.122.0.0/15" {
+		t.Fatalf("unexpected body: %q", string(body))
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/", nil)
+	rec = httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(rec, req)
+	body, _ = io.ReadAll(rec.Body)
+	for _, path := range []string{"/m365/skype", "/m365/exchange", "/m365/sharepoint", "/m365/common"} {
+		if !strings.Contains(string(body), path) {
+			t.Errorf("index did not list %s: %q", path, string(body))
+		}
+	}
+}
