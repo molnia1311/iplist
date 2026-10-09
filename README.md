@@ -9,6 +9,8 @@ external sources and kept in memory.
 - `GET /github` – IPv4 CIDRs from the GitHub meta API
 - `GET /azure/{tag}` – IPv4 CIDRs for the official Azure Service Tag `{tag}`
   (e.g. `/azure/AzureBotService`, `/azure/MicrosoftTeams`)
+- `GET /m365/{area}` – IPv4 CIDRs for the Microsoft 365 service area `{area}`
+  (e.g. `/m365/skype`, `/m365/exchange`, `/m365/sharepoint`, `/m365/common`)
 - `GET /metrics` – Prometheus metrics
 
 ## Metrics
@@ -32,22 +34,26 @@ Example output:
 # TYPE iplist_prefixes_total gauge
 iplist_prefixes_total{list="azure:AzureBotService"} 267
 iplist_prefixes_total{list="github:github"} 20
+iplist_prefixes_total{list="m365:skype"} 2
 
 # HELP iplist_fetch_total Total number of fetch attempts per allowlist and outcome.
 # TYPE iplist_fetch_total counter
 iplist_fetch_total{list="azure:AzureBotService",status="success"} 12
 iplist_fetch_total{list="github:github",status="success"} 12
+iplist_fetch_total{list="m365:skype",status="success"} 12
 iplist_fetch_total{list="github:github",status="failure"} 1
 
 # HELP iplist_last_success_timestamp Unix timestamp of the last successful fetch for each allowlist.
 # TYPE iplist_last_success_timestamp gauge
 iplist_last_success_timestamp{list="azure:AzureBotService"} 1759937500
 iplist_last_success_timestamp{list="github:github"} 1759937500
+iplist_last_success_timestamp{list="m365:skype"} 1759937500
 
 # HELP iplist_staleness_seconds Seconds since the last successful fetch for each allowlist.
 # TYPE iplist_staleness_seconds gauge
 iplist_staleness_seconds{list="azure:AzureBotService"} 47
 iplist_staleness_seconds{list="github:github"} 47
+iplist_staleness_seconds{list="m365:skype"} 47
 ```
 
 ## Running
@@ -71,6 +77,7 @@ The server listens on `:8080` by default. Use `-addr` or `LISTEN_ADDR` to change
 ```bash
 curl http://localhost:8080/github
 curl http://localhost:8080/azure/AzureBotService
+curl http://localhost:8080/m365/skype
 curl http://localhost:8080/metrics
 ```
 
@@ -93,5 +100,6 @@ docker run -p 8080:8080 iplist
 
 - Azure Service Tags – Public Cloud: https://www.microsoft.com/en-us/download/details.aspx?id=56519
 - GitHub meta API: https://api.github.com/meta
+- Microsoft 365 web service: https://endpoints.office.com/endpoints/Worldwide
 
 If an upstream source is unavailable, the last successfully fetched list is served.

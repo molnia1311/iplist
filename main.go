@@ -14,6 +14,7 @@ import (
 
 	"git.stellar.study/stellar-study/iplist/internal/azure"
 	"git.stellar.study/stellar-study/iplist/internal/github"
+	"git.stellar.study/stellar-study/iplist/internal/m365"
 	"git.stellar.study/stellar-study/iplist/internal/server"
 )
 
@@ -26,6 +27,7 @@ func main() {
 	sources := []server.Source{
 		azure.NewSource(*timeout),
 		github.NewSource(*timeout),
+		m365.NewSource(*timeout),
 	}
 
 	srv := server.New(*addr, *refresh, sources)

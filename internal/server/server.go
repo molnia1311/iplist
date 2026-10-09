@@ -77,16 +77,24 @@ func New(addr string, interval time.Duration, sources []Source) *Server {
 		if name == "github" {
 			s.caches["github:github"] = &cached{}
 		}
+		// Microsoft 365 exposes four known service areas; pre-create their caches.
+		if name == "m365" {
+			for _, area := range []string{"skype", "exchange", "sharepoint", "common"} {
+				s.caches["m365:"+area] = &cached{}
+			}
+		}
 	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/metrics", metrics.Handler)
 	mux.HandleFunc("/github", s.handleAllowlist("github:github"))
 	mux.HandleFunc("/azure/", s.handleAzure)
+	mux.HandleFunc("/m365/", s.handleM365)
 	mux.HandleFunc("/", s.handleIndex)
 
 	log.Printf("registered endpoint: GET /github -> github:github")
 	log.Printf("registered endpoint: GET /azure/{tag}")
+	log.Printf("registered endpoint: GET /m365/{area}")
 
 	s.httpServer = &http.Server{
 		Addr:    addr,
@@ -196,6 +204,9 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(key, "azure:") {
 			paths = append(paths, "/azure/"+strings.TrimPrefix(key, "azure:"))
 		}
+		if strings.HasPrefix(key, "m365:") {
+			paths = append(paths, "/m365/"+strings.TrimPrefix(key, "m365:"))
+		}
 	}
 	sort.Strings(paths)
 	for _, p := range paths {
@@ -221,6 +232,21 @@ func (s *Server) handleAzure(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.handleAllowlist("azure:"+tag).ServeHTTP(w, r)
+}
+
+func (s *Server) handleM365(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	area := strings.ToLower(strings.TrimPrefix(r.URL.Path, "/m365/"))
+	if area == "" || strings.Contains(area, "/") {
+		http.NotFound(w, r)
+		return
+	}
+
+	s.handleAllowlist("m365:"+area).ServeHTTP(w, r)
 }
 
 func (s *Server) handleAllowlist(key string) http.HandlerFunc {
